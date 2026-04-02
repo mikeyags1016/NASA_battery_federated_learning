@@ -23,6 +23,14 @@ capacity = discharge_meta['Capacity'].values
 
 SOH = capacity / capacity[0]
 
+plt.figure(figsize=(8,4))
+plt.plot(SOH, linewidth=2)
+plt.xlabel("Discharge Cycle Index")
+plt.ylabel("SOH")
+plt.title("Battery State of Health (SOH)")
+plt.grid(True)
+plt.show()
+
 battery_id = discharge_meta['battery_id'].iloc[0]
 battery_df = discharge_meta[
     discharge_meta['battery_id'] == battery_id
