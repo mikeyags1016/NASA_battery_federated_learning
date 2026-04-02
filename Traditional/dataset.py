@@ -39,3 +39,5 @@ plt.ylabel("SOH")
 plt.title(f"SOH Degradation - Battery {battery_id}")
 plt.grid(True)
 plt.show()
+
+#test
