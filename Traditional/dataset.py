@@ -5,9 +5,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 
-base_path = "../../nasa-battery-dataset/cleaned_dataset/data"
-file_path = "../../nasa-battery-dataset/cleaned_dataset/data/00001.csv"  
-metadata = pd.read_csv("../../nasa-battery-dataset/cleaned_dataset/metadata.csv")
+base_path = "../../cleaned_dataset/data"
+file_path = "../../cleaned_dataset/data/00001.csv"  
+metadata = pd.read_csv("../../cleaned_dataset/metadata.csv")
 
 df = pd.read_csv(file_path)
 discharge_meta = metadata[
@@ -19,7 +19,7 @@ capacities = []
 
 def coulomb_capacity(time_s, current_a):
     time_h = time_s / 3600
-    return np.trapezoid(np.abs(current_a), time_h)
+    return np.trapz(np.abs(current_a), time_h)
 
 capacity_i = coulomb_capacity(
     df['Time'].values,

@@ -1,0 +1,65 @@
+{
+  "summary": {
+    "num_rounds": 3,
+    "total_wall_time_s": 69.336,
+    "total_bytes_transmitted_MB": 114.7674,
+    "final_global_mae": 4.579013,
+    "final_global_rmse": 4.946718,
+    "final_global_accuracy_1pct": 0.0,
+    "avg_round_time_s": 19.189,
+    "avg_client_peak_memory_kb": 161.48
+  },
+  "rounds": [
+    {
+      "round_num": 1,
+      "bytes_sent_to_clients": 20056575,
+      "bytes_received_from_clients": 20057429,
+      "num_clients_trained": 5,
+      "num_clients_evaluated": 5,
+      "round_wall_time_s": 27.13055627499125,
+      "avg_client_train_time_s": 1.2741938042017864,
+      "avg_client_peak_memory_kb": 165.87421875,
+      "avg_train_loss": 0.18596095036651983,
+      "avg_eval_mae": 3.5819402543440155,
+      "avg_eval_rmse": 5.014598074125349,
+      "avg_eval_accuracy_1pct": 0.0,
+      "global_mae": 4.579012921096996,
+      "global_rmse": 4.946718195249038,
+      "global_accuracy_1pct": 0.0
+    },
+    {
+      "round_num": 2,
+      "bytes_sent_to_clients": 20056733,
+      "bytes_received_from_clients": 20057429,
+      "num_clients_trained": 5,
+      "num_clients_evaluated": 5,
+      "round_wall_time_s": 15.098661637995974,
+      "avg_client_train_time_s": 1.2989133372029755,
+      "avg_client_peak_memory_kb": 158.2962890625,
+      "avg_train_loss": 0.18596095036651983,
+      "avg_eval_mae": 3.5819402543440155,
+      "avg_eval_rmse": 5.014598074125348,
+      "avg_eval_accuracy_1pct": 0.0,
+      "global_mae": 4.579012921096995,
+      "global_rmse": 4.946718195249038,
+      "global_accuracy_1pct": 0.0
+    },
+    {
+      "round_num": 3,
+      "bytes_sent_to_clients": 20056742,
+      "bytes_received_from_clients": 20057429,
+      "num_clients_trained": 5,
+      "num_clients_evaluated": 5,
+      "round_wall_time_s": 15.338510335001047,
+      "avg_client_train_time_s": 1.5514311322040157,
+      "avg_client_peak_memory_kb": 160.2607421875,
+      "avg_train_loss": 0.18596095036651983,
+      "avg_eval_mae": 3.5819402543440155,
+      "avg_eval_rmse": 5.014598074125348,
+      "avg_eval_accuracy_1pct": 0.0,
+      "global_mae": 4.579012921096996,
+      "global_rmse": 4.946718195249038,
+      "global_accuracy_1pct": 0.0
+    }
+  ]
+}

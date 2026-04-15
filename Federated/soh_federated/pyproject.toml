@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "soh-federated"
+version = "0.1.0"
+description = "Federated State-of-Health (SOH) estimation using Flower + scikit-learn"
+requires-python = ">=3.10"
+dependencies = [
+    "flwr[simulation]>=1.10,<2.0",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scikit-learn>=1.3",
+    "matplotlib>=3.7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["sohfed"]
+
+# ---------------------------------------------------------------------------
+# Flower app configuration
+# ---------------------------------------------------------------------------
+[tool.flwr.app]
+publisher = "your-org"
+
+[tool.flwr.app.components]
+serverapp = "sohfed.server_app:app"
+clientapp = "sohfed.client_app:app"
+
+[tool.flwr.app.config]
+# Paths (adjust to your dataset location)
+data-base-path    = "../../cleaned_dataset/data"
+metadata-path     = "../../cleaned_dataset/metadata.csv"
+
+# Training
+num-server-rounds   = 3
+n-estimators        = 100
+test-size           = 0.2
+fraction-fit        = 1.0
+fraction-evaluate   = 1.0
+min-fit-clients     = 2
+min-evaluate-clients= 2
+min-available-clients = 2
+
+# Data partitioning strategy
+# Options: "iid" | "by_battery" | "dirichlet"
+#   iid         → random equal slices across all cycles (FL baseline)
+#   by_battery  → each client owns complete batteries (most realistic, default)
+#   dirichlet   → probabilistic skew via Dirichlet(alpha)
+partition-strategy  = "by_battery"
+dirichlet-alpha     = 0.5   # only used when partition-strategy = "dirichlet"
+
+# Output
+benchmark-output = "benchmark_report.json"
+
+[tool.flwr.federations.local-simulation]
+options.num-supernodes = 5
+
+[tool.flwr.federations.local-simulation.options.backend.client-resources]
+num-cpus = 1
+num-gpus = 0.0
