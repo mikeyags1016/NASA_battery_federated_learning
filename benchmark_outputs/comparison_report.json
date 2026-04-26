@@ -1,0 +1,65 @@
+{
+  "config": {
+    "num_satellites": 5,
+    "fed_rounds": 1,
+    "traditional_estimators": 200,
+    "federated_estimators_per_client": 100,
+    "partition_strategy": "by_battery"
+  },
+  "traditional": {
+    "mode": "traditional",
+    "num_rounds": 1,
+    "total_wall_time_s": 3.573,
+    "total_bytes_uploaded_MB": 45.2217,
+    "total_bytes_downloaded_MB": 191.3072,
+    "total_bytes_transmitted_MB": 236.529,
+    "final_global_mae": 0.852479,
+    "final_global_rmse": 2.956003,
+    "final_global_r2": 0.749168,
+    "final_global_accuracy_1pct": 0.3556,
+    "avg_round_time_s": 3.573,
+    "avg_client_cpu_time_s": 3.547,
+    "avg_client_peak_memory_kb": 353.41,
+    "num_train_samples": 2215,
+    "num_test_samples": 554,
+    "num_satellites": 5,
+    "raw_upload_bytes": 47418400,
+    "model_download_bytes": 200600190,
+    "n_estimators": 200
+  },
+  "federated": {
+    "mode": "federated",
+    "num_rounds": 1,
+    "total_wall_time_s": 15.805,
+    "total_bytes_uploaded_MB": 15.3323,
+    "total_bytes_downloaded_MB": 76.6763,
+    "total_bytes_transmitted_MB": 92.0085,
+    "final_global_mae": 4.076832,
+    "final_global_rmse": 5.91107,
+    "final_global_r2": -0.00301,
+    "final_global_accuracy_1pct": 0.0253,
+    "avg_round_time_s": 10.853,
+    "avg_client_cpu_time_s": 1.197,
+    "avg_client_peak_memory_kb": 162.16
+  },
+  "derived_metrics": {
+    "traditional_total_mb_per_satellite": 47.3058,
+    "federated_total_mb_per_satellite": 18.401699999999998,
+    "traditional_accuracy_1pct_per_second": 0.09952420934788694,
+    "federated_accuracy_1pct_per_second": 0.0016007592534008225,
+    "traditional_r2_per_second": 0.209674783095438,
+    "federated_r2_per_second": -0.00019044606137298323
+  },
+  "winner_by_metric": {
+    "mae": "traditional",
+    "rmse": "traditional",
+    "r2": "traditional",
+    "accuracy_1pct": "traditional",
+    "upload_mb": "federated",
+    "download_mb": "federated",
+    "total_mb": "federated",
+    "wall_time_s": "traditional",
+    "cpu_time_s": "federated",
+    "peak_memory_kb": "federated"
+  }
+}

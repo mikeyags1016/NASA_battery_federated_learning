@@ -1,0 +1,38 @@
+{
+  "summary": {
+    "mode": "federated",
+    "num_rounds": 1,
+    "total_wall_time_s": 15.207,
+    "total_bytes_uploaded_MB": 1.5335,
+    "total_bytes_downloaded_MB": 3.0657,
+    "total_bytes_transmitted_MB": 4.5992,
+    "final_global_mae": 4.646495,
+    "final_global_rmse": 6.947023,
+    "final_global_r2": -0.385385,
+    "final_global_accuracy_1pct": 0.0054,
+    "avg_round_time_s": 10.337,
+    "avg_client_cpu_time_s": 0.141,
+    "avg_client_peak_memory_kb": 84.75
+  },
+  "rounds": [
+    {
+      "round_num": 1,
+      "bytes_sent_to_clients": 3214596,
+      "bytes_received_from_clients": 1607972,
+      "num_clients_trained": 2,
+      "num_clients_evaluated": 2,
+      "round_wall_time_s": 10.336687800008804,
+      "avg_client_train_time_s": 0.14676969998981804,
+      "avg_client_cpu_time_s": 0.140625,
+      "avg_client_peak_memory_kb": 84.74609375,
+      "avg_train_loss": 1.0864798102251045,
+      "avg_eval_mae": 4.4006627352306555,
+      "avg_eval_rmse": 6.983474762888482,
+      "avg_eval_accuracy_1pct": 0.019593253968253968,
+      "global_mae": 4.646494879999025,
+      "global_rmse": 6.947023150708883,
+      "global_r2": -0.38538484186952493,
+      "global_accuracy_1pct": 0.005415162454873646
+    }
+  ]
+}
