@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 import tracemalloc
 from typing import Any
@@ -32,6 +33,15 @@ from typing import Any
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+if THIS_DIR not in sys.path:
+    sys.path.insert(0, THIS_DIR)
+os.environ["PYTHONPATH"] = (
+    THIS_DIR
+    if not os.environ.get("PYTHONPATH")
+    else THIS_DIR + os.pathsep + os.environ["PYTHONPATH"]
+)
 
 import flwr as fl
 from flwr.common import (
@@ -49,6 +59,7 @@ from sohfed.task import (
     FederatedForest,
     evaluate,
     load_data,
+    load_global_splits,
     train,
     bytes_to_model,
     bytes_to_ndarray,
@@ -67,8 +78,12 @@ def build_client_fn(
     metadata_path: str,
     num_partitions: int,
     n_estimators: int,
+    global_test_size: float = 0.2,
     partition_strategy: str = "by_battery",
     dirichlet_alpha: float = 0.5,
+    max_depth: int | None = None,
+    min_samples_leaf: int = 1,
+    max_features: str | int | float | None = "sqrt",
 ):
     """Return a closure compatible with flwr.simulation.start_simulation."""
 
@@ -80,6 +95,7 @@ def build_client_fn(
             metadata_path=metadata_path,
             partition_id=partition_id,
             num_partitions=num_partitions,
+            global_test_size=global_test_size,
             partition_strategy=partition_strategy,
             dirichlet_alpha=dirichlet_alpha,
         )
@@ -89,15 +105,28 @@ def build_client_fn(
                 return [np.array([], dtype=np.uint8)]
 
             def fit(self, parameters, config):
-                rf, bench = train(X_train, y_train, n_estimators=n_estimators)
+                server_round = int(config.get("server_round", 1))
+                local_seed = 42 + (server_round * 1000) + partition_id
+                rf, bench = train(
+                    X_train,
+                    y_train,
+                    n_estimators=n_estimators,
+                    random_state=local_seed,
+                    max_depth=max_depth,
+                    min_samples_leaf=min_samples_leaf,
+                    max_features=max_features,
+                )
                 eval_m = evaluate(rf, X_test, y_test)
                 model_bytes = model_to_bytes(rf)
                 metrics = {
                     "train_time_s":       bench["train_time_s"],
+                    "cpu_time_s":         bench["cpu_time_s"],
                     "peak_memory_kb":     bench["peak_memory_kb"],
                     "model_size_bytes":   float(len(model_bytes)),
+                    "n_train_samples":    float(bench["n_train_samples"]),
                     "local_mae":          eval_m["mae"],
                     "local_rmse":         eval_m["rmse"],
+                    "local_r2":           eval_m["r2"],
                     "local_accuracy_1pct": eval_m["accuracy_1pct"],
                     "num_examples":       float(len(X_train)),
                 }
@@ -131,6 +160,7 @@ def build_client_fn(
                 return float(eval_m["mae"]), len(X_test), {
                     "mae": eval_m["mae"],
                     "rmse": eval_m["rmse"],
+                    "r2": eval_m["r2"],
                     "accuracy_1pct": eval_m["accuracy_1pct"],
                 }
 
@@ -149,22 +179,31 @@ class BenchmarkStrategy(FedAvg):
         base_path: str,
         metadata_path: str,
         num_partitions: int,
+        global_test_size: float = 0.2,
         benchmark_output: str = None,  # ← ADD THIS LINE
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.report = BenchmarkReport()
+        self.report = BenchmarkReport(mode="federated")
         self.benchmark_output = benchmark_output  # ← ADD THIS LINE (optional)
         self._round_start = time.perf_counter()
         self._total_start = time.perf_counter()
+        self.global_forest = FederatedForest()
 
         # Server-side global test set
-        _, self.X_test_g, _, self.y_test_g = load_data(
+        (
+            _X_train_pool,
+            self.X_test_g,
+            _y_train_pool,
+            self.y_test_g,
+            _train_battery_ids,
+            _test_battery_ids,
+            _train_filenames,
+            _test_filenames,
+        ) = load_global_splits(
             base_path=base_path,
             metadata_path=metadata_path,
-            partition_id=0,
-            num_partitions=num_partitions,
-            test_size=0.3,
+            global_test_size=global_test_size,
         )
         print(f"[Server] Global eval set: {len(self.X_test_g)} samples")
 
@@ -180,9 +219,9 @@ class BenchmarkStrategy(FedAvg):
         rm = RoundMetrics(round_num=server_round)
         rm.num_clients_trained = len(results)
 
-        fed_forest = FederatedForest()
+        round_forest = FederatedForest()
         total_rx = 0
-        train_times, peak_mems, local_maes = [], [], []
+        train_times, cpu_times, peak_mems, local_maes = [], [], [], []
 
         for _proxy, fit_res in results:
             ndarrays = parameters_to_ndarrays(fit_res.parameters)
@@ -191,28 +230,33 @@ class BenchmarkStrategy(FedAvg):
             raw = ndarray_to_bytes(ndarrays[0])
             total_rx += len(raw)
             rf = bytes_to_model(raw)
-            fed_forest.add(rf)
             m = fit_res.metrics or {}
+            round_forest.add(rf, weight=float(m.get("n_train_samples", fit_res.num_examples)))
             train_times.append(float(m.get("train_time_s", 0)))
+            cpu_times.append(float(m.get("cpu_time_s", 0)))
             peak_mems.append(float(m.get("peak_memory_kb", 0)))
             local_maes.append(float(m.get("local_mae", 0)))
 
+        self.global_forest.extend(round_forest)
+
         rm.bytes_received_from_clients = total_rx
         rm.avg_client_train_time_s = float(np.mean(train_times)) if train_times else 0
+        rm.avg_client_cpu_time_s = float(np.mean(cpu_times)) if cpu_times else 0
         rm.avg_client_peak_memory_kb = float(np.mean(peak_mems)) if peak_mems else 0
         rm.avg_train_loss = float(np.mean(local_maes)) if local_maes else 0
 
         # Global eval
-        if fed_forest.forests:
-            gm = evaluate(fed_forest, self.X_test_g, self.y_test_g)
+        if self.global_forest.forests:
+            gm = evaluate(self.global_forest, self.X_test_g, self.y_test_g)
             rm.global_mae  = gm["mae"]
             rm.global_rmse = gm["rmse"]
+            rm.global_r2 = gm["r2"]
             rm.global_accuracy_1pct = gm["accuracy_1pct"]
 
         # Serialise aggregated forest
-        agg_bytes = fed_forest.to_bytes()
+        agg_bytes = self.global_forest.to_bytes()
         agg_arr   = bytes_to_ndarray(agg_bytes)
-        rm.bytes_sent_to_clients = len(agg_bytes)
+        rm.bytes_sent_to_clients = len(agg_bytes) * len(results)
 
         rm.round_wall_time_s = time.perf_counter() - self._round_start
         self._round_start    = time.perf_counter()
@@ -244,9 +288,11 @@ class BenchmarkStrategy(FedAvg):
         w_mae = sum(r.loss * r.num_examples for _, r in results) / max(total_ex, 1)
         maes  = [r.metrics.get("mae",  0.0) for _, r in results]
         rmses = [r.metrics.get("rmse", 0.0) for _, r in results]
+        accs  = [r.metrics.get("accuracy_1pct", 0.0) for _, r in results]
         if self.report.rounds:
             self.report.rounds[-1].avg_eval_mae  = float(np.mean(maes))
             self.report.rounds[-1].avg_eval_rmse = float(np.mean(rmses))
+            self.report.rounds[-1].avg_eval_accuracy_1pct = float(np.mean(accs))
             self.report.rounds[-1].num_clients_evaluated = len(results)
         return w_mae, {"avg_mae": float(np.mean(maes))}
 
@@ -259,6 +305,10 @@ class BenchmarkStrategy(FedAvg):
 # ---------------------------------------------------------------------------
 
 def plot_benchmarks(report: BenchmarkReport, output_dir: str) -> None:
+    if not report.rounds:
+        print("[Plot] Skipped benchmark dashboard because no rounds were recorded.")
+        return
+
     rounds = [r.round_num for r in report.rounds]
     mae    = [r.global_mae   for r in report.rounds]
     rmse   = [r.global_rmse  for r in report.rounds]
@@ -343,15 +393,26 @@ def plot_benchmarks(report: BenchmarkReport, output_dir: str) -> None:
     ax8.axis("off")
     ax8.set_facecolor(AX_BG)
     summ = report.summary()
+    total_time = summ.get("total_wall_time_s", 0.0) or 0.0
+    total_tx = summ.get("total_bytes_transmitted_MB", 0.0) or 0.0
+    final_mae = summ.get("final_global_mae", 0.0) or 0.0
+    final_rmse = summ.get("final_global_rmse", 0.0) or 0.0
+    final_r2 = summ.get("final_global_r2", 0.0) or 0.0
+    final_acc = summ.get("final_global_accuracy_1pct", 0.0) or 0.0
+    avg_round = summ.get("avg_round_time_s", 0.0) or 0.0
+    avg_cpu = summ.get("avg_client_cpu_time_s", 0.0) or 0.0
+    avg_mem = summ.get("avg_client_peak_memory_kb", 0.0) or 0.0
     lines = [
         f"Rounds:           {summ.get('num_rounds', '-')}",
-        f"Total time:       {summ.get('total_wall_time_s', '-'):.2f}s",
-        f"Total TX:         {summ.get('total_bytes_transmitted_MB', '-'):.3f} MB",
-        f"Final MAE:        {summ.get('final_global_mae', '-'):.5f}",
-        f"Final RMSE:       {summ.get('final_global_rmse', '-'):.5f}",
-        f"Final acc <1%:    {summ.get('final_global_accuracy_1pct', '-'):.3f}",
-        f"Avg round time:   {summ.get('avg_round_time_s', '-'):.2f}s",
-        f"Avg peak mem:     {summ.get('avg_client_peak_memory_kb', '-'):.0f} KB",
+        f"Total time:       {total_time:.2f}s",
+        f"Total TX:         {total_tx:.3f} MB",
+        f"Final MAE:        {final_mae:.5f}",
+        f"Final RMSE:       {final_rmse:.5f}",
+        f"Final R2:         {final_r2:.5f}",
+        f"Final acc <1%:    {final_acc:.3f}",
+        f"Avg round time:   {avg_round:.2f}s",
+        f"Avg client CPU:   {avg_cpu:.2f}s",
+        f"Avg peak mem:     {avg_mem:.0f} KB",
     ]
     ax8.text(
         0.05, 0.95,
@@ -371,8 +432,67 @@ def plot_benchmarks(report: BenchmarkReport, output_dir: str) -> None:
         bbox_inches="tight",
         facecolor=fig.get_facecolor(),
     )
-    print(f"[Plot] Saved → {output_dir}/benchmark_dashboard.png")
+    print(f"[Plot] Saved -> {output_dir}/benchmark_dashboard.png")
     plt.close(fig)
+
+
+def run_simulation_benchmark(
+    data_path: str,
+    metadata_path: str,
+    num_clients: int,
+    num_rounds: int,
+    n_estimators: int,
+    output_dir: str,
+    global_test_size: float = 0.2,
+    partition_strategy: str = "by_battery",
+    dirichlet_alpha: float = 0.5,
+    max_depth: int | None = None,
+    min_samples_leaf: int = 1,
+    max_features: str | int | float | None = "sqrt",
+) -> BenchmarkReport:
+    """Run the federated simulation benchmark and save report artifacts."""
+    os.makedirs(output_dir, exist_ok=True)
+
+    strategy = BenchmarkStrategy(
+        base_path=data_path,
+        metadata_path=metadata_path,
+        num_partitions=num_clients,
+        global_test_size=global_test_size,
+        benchmark_output=os.path.join(output_dir, "benchmark_report.json"),
+        min_fit_clients=num_clients,
+        min_evaluate_clients=num_clients,
+        min_available_clients=num_clients,
+        fraction_fit=1.0,
+        fraction_evaluate=1.0,
+    )
+
+    client_fn = build_client_fn(
+        base_path=data_path,
+        metadata_path=metadata_path,
+        num_partitions=num_clients,
+        n_estimators=n_estimators,
+        global_test_size=global_test_size,
+        partition_strategy=partition_strategy,
+        dirichlet_alpha=dirichlet_alpha,
+        max_depth=max_depth,
+        min_samples_leaf=min_samples_leaf,
+        max_features=max_features,
+    )
+
+    fl.simulation.start_simulation(
+        client_fn=client_fn,
+        num_clients=num_clients,
+        config=fl.server.ServerConfig(num_rounds=num_rounds),
+        strategy=strategy,
+        client_resources={"num_cpus": 1, "num_gpus": 0.0},
+    )
+
+    strategy.finalize()
+    report = strategy.report
+    json_path = os.path.join(output_dir, "benchmark_report.json")
+    report.save(json_path)
+    plot_benchmarks(report, output_dir)
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -388,6 +508,10 @@ def main() -> None:
     parser.add_argument("--num-clients",   type=int, default=5,     help="Number of federated clients")
     parser.add_argument("--num-rounds",    type=int, default=3,     help="Number of FL rounds")
     parser.add_argument("--n-estimators",  type=int, default=100,   help="Trees per RandomForest")
+    parser.add_argument("--max-depth", type=int, default=None, help="Optional max depth for local random forests")
+    parser.add_argument("--min-samples-leaf", type=int, default=1, help="Minimum samples per leaf in local random forests")
+    parser.add_argument("--max-features", default="sqrt", help="RandomForest max_features setting")
+    parser.add_argument("--global-test-size", type=float, default=0.2, help="Shared holdout fraction used for both centralized and federated comparison")
     parser.add_argument("--output-dir",    default="results",       help="Directory for outputs")
     parser.add_argument(
         "--partition-strategy",
@@ -424,41 +548,20 @@ def main() -> None:
     print(f"\n  output dir         : {args.output_dir}")
     print("=" * 60 + "\n")
 
-    strategy = BenchmarkStrategy(
-        base_path=args.data_path,
+    report = run_simulation_benchmark(
+        data_path=args.data_path,
         metadata_path=args.metadata_path,
-        num_partitions=args.num_clients,
-        benchmark_output=os.path.join(args.output_dir, "benchmark_report.json"),
-        min_fit_clients=args.num_clients,
-        min_evaluate_clients=args.num_clients,
-        min_available_clients=args.num_clients,
-        fraction_fit=1.0,
-        fraction_evaluate=1.0,
-    )
-
-    client_fn = build_client_fn(
-        base_path=args.data_path,
-        metadata_path=args.metadata_path,
-        num_partitions=args.num_clients,
+        num_clients=args.num_clients,
+        num_rounds=args.num_rounds,
         n_estimators=args.n_estimators,
+        output_dir=args.output_dir,
+        global_test_size=args.global_test_size,
         partition_strategy=args.partition_strategy,
         dirichlet_alpha=args.dirichlet_alpha,
+        max_depth=args.max_depth,
+        min_samples_leaf=args.min_samples_leaf,
+        max_features=args.max_features,
     )
-
-    fl.simulation.start_simulation(
-        client_fn=client_fn,
-        num_clients=args.num_clients,
-        config=fl.server.ServerConfig(num_rounds=args.num_rounds),
-        strategy=strategy,
-        client_resources={"num_cpus": 1, "num_gpus": 0.0},
-    )
-
-    strategy.finalize()
-    report = strategy.report
-
-    # Save JSON report
-    json_path = os.path.join(args.output_dir, "benchmark_report.json")
-    report.save(json_path)
 
     # Print summary
     print("\n" + "=" * 60)
@@ -467,10 +570,6 @@ def main() -> None:
     for k, v in report.summary().items():
         print(f"  {k:<35}: {v}")
     print("=" * 60)
-
-    # Plot
-    plot_benchmarks(report, args.output_dir)
-
 
 if __name__ == "__main__":
     main()

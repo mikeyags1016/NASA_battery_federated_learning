@@ -17,10 +17,7 @@ A BenchmarkReport JSON file is written to disk after training completes.
 
 from __future__ import annotations
 
-import os
-import pickle
 import time
-from functools import reduce
 from typing import Any
 
 import numpy as np
@@ -42,11 +39,10 @@ from flwr.common import Context
 from sohfed.task import (
     FederatedForest,
     evaluate,
-    load_data,
+    load_global_splits,
     bytes_to_model,
     ndarray_to_bytes,
     bytes_to_ndarray,
-    model_to_bytes,
 )
 from sohfed.benchmarks import BenchmarkReport, RoundMetrics, Timer
 
@@ -68,6 +64,7 @@ class FederatedForestStrategy(FedAvg):
         base_path: str,
         metadata_path: str,
         num_partitions: int,
+        global_test_size: float = 0.2,
         benchmark_output: str = "benchmark_report.json",
         **kwargs: Any,
     ) -> None:
@@ -76,23 +73,25 @@ class FederatedForestStrategy(FedAvg):
         self.metadata_path = metadata_path
         self.num_partitions = num_partitions
         self.benchmark_output = benchmark_output
-        self.report = BenchmarkReport()
+        self.report = BenchmarkReport(mode="federated")
         self._total_timer = Timer()
         self._round_start: float = 0.0
         self._current_round_metrics = RoundMetrics()
+        self.global_forest = FederatedForest()
 
-        # Load server-side evaluation data (use partition 0 test split)
         (
-            _,
+            _X_train_pool,
             self.X_test_global,
-            _,
+            _y_train_pool,
             self.y_test_global,
-        ) = load_data(
+            _train_battery_ids,
+            _test_battery_ids,
+            _train_filenames,
+            _test_filenames,
+        ) = load_global_splits(
             base_path=self.base_path,
             metadata_path=self.metadata_path,
-            partition_id=0,
-            num_partitions=num_partitions,
-            test_size=0.3,
+            global_test_size=global_test_size,
         )
         print(
             f"[Server] Global eval set: {len(self.X_test_global)} samples"
@@ -116,10 +115,11 @@ class FederatedForestStrategy(FedAvg):
         rm.num_clients_trained = len(results)
 
         # ---- Reconstruct FederatedForest from client payloads ----
-        fed_forest = FederatedForest()
+        round_forest = FederatedForest()
         total_bytes_received = 0
 
         train_times: list[float] = []
+        cpu_times: list[float] = []
         peak_mems: list[float] = []
         local_maes: list[float] = []
 
@@ -132,29 +132,35 @@ class FederatedForestStrategy(FedAvg):
             total_bytes_received += len(model_bytes)
 
             rf = bytes_to_model(model_bytes)
-            fed_forest.add(rf)
 
             m = fit_res.metrics or {}
+            train_weight = float(m.get("n_train_samples", fit_res.num_examples))
+            round_forest.add(rf, weight=train_weight)
             train_times.append(float(m.get("train_time_s", 0)))
+            cpu_times.append(float(m.get("cpu_time_s", 0)))
             peak_mems.append(float(m.get("peak_memory_kb", 0)))
             local_maes.append(float(m.get("local_mae", 0)))
 
+        self.global_forest.extend(round_forest)
+
         rm.bytes_received_from_clients = total_bytes_received
         rm.avg_client_train_time_s = float(np.mean(train_times)) if train_times else 0.0
+        rm.avg_client_cpu_time_s = float(np.mean(cpu_times)) if cpu_times else 0.0
         rm.avg_client_peak_memory_kb = float(np.mean(peak_mems)) if peak_mems else 0.0
         rm.avg_train_loss = float(np.mean(local_maes)) if local_maes else 0.0
 
         # ---- Server-side global evaluation ----
-        if fed_forest.forests:
-            global_metrics = evaluate(fed_forest, self.X_test_global, self.y_test_global)
+        if self.global_forest.forests:
+            global_metrics = evaluate(self.global_forest, self.X_test_global, self.y_test_global)
             rm.global_mae = global_metrics["mae"]
             rm.global_rmse = global_metrics["rmse"]
+            rm.global_r2 = global_metrics["r2"]
             rm.global_accuracy_1pct = global_metrics["accuracy_1pct"]
 
         # ---- Serialise aggregated forest as parameters ----
-        agg_bytes = fed_forest.to_bytes()
+        agg_bytes = self.global_forest.to_bytes()
         agg_array = bytes_to_ndarray(agg_bytes)
-        rm.bytes_sent_to_clients = len(agg_bytes)
+        rm.bytes_sent_to_clients = len(agg_bytes) * len(results)
 
         # Wall time for round
         rm.round_wall_time_s = time.perf_counter() - self._round_start
@@ -172,10 +178,13 @@ class FederatedForestStrategy(FedAvg):
         self.report.add_round(rm)
         self._current_round_metrics = RoundMetrics()  # reset for next round
         self._round_start = time.perf_counter()        # start next round timer
+        self.report.total_wall_time_s = time.perf_counter() - self._total_start
+        self.report.save(self.benchmark_output)
 
         agg_metrics: dict[str, Scalar] = {
             "global_mae": rm.global_mae,
             "global_rmse": rm.global_rmse,
+            "global_r2": rm.global_r2,
             "accuracy_1pct": rm.global_accuracy_1pct,
             "round_wall_time_s": rm.round_wall_time_s,
         }
@@ -202,16 +211,23 @@ class FederatedForestStrategy(FedAvg):
 
         maes = [r.metrics.get("mae", 0.0) for _, r in results]
         rmses = [r.metrics.get("rmse", 0.0) for _, r in results]
+        r2s = [r.metrics.get("r2", 0.0) for _, r in results]
+        accs = [r.metrics.get("accuracy_1pct", 0.0) for _, r in results]
 
         # Patch the current (already-stored) round's eval metrics
         if self.report.rounds:
             self.report.rounds[-1].avg_eval_mae = float(np.mean(maes))
             self.report.rounds[-1].avg_eval_rmse = float(np.mean(rmses))
+            self.report.rounds[-1].avg_eval_accuracy_1pct = float(np.mean(accs))
             self.report.rounds[-1].num_clients_evaluated = len(results)
+            self.report.total_wall_time_s = time.perf_counter() - self._total_start
+            self.report.save(self.benchmark_output)
 
         return weighted_mae, {
             "avg_mae": float(np.mean(maes)),
             "avg_rmse": float(np.mean(rmses)),
+            "avg_r2": float(np.mean(r2s)),
+            "avg_accuracy_1pct": float(np.mean(accs)),
         }
 
     def initialize_parameters(self, client_manager: Any) -> Parameters | None:
@@ -233,6 +249,7 @@ def server_fn(context: Context) -> fl.server.Server:
         metadata_path=cfg.get("metadata-path", "metadata.csv"),
         num_partitions=int(cfg.get("num-supernodes", 5)),
         benchmark_output=cfg.get("benchmark-output", "benchmark_report.json"),
+        global_test_size=float(cfg.get("global-test-size", 0.2)),
         min_fit_clients=int(cfg.get("min-fit-clients", 2)),
         min_evaluate_clients=int(cfg.get("min-evaluate-clients", 2)),
         min_available_clients=int(cfg.get("min-available-clients", 2)),

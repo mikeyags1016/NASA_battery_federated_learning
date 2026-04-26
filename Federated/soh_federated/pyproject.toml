@@ -36,7 +36,11 @@ metadata-path     = "../../cleaned_dataset/metadata.csv"
 # Training
 num-server-rounds   = 3
 n-estimators        = 100
+max-depth           = 10
+min-samples-leaf    = 2
+max-features        = "sqrt"
 test-size           = 0.2
+global-test-size    = 0.2
 fraction-fit        = 1.0
 fraction-evaluate   = 1.0
 min-fit-clients     = 2

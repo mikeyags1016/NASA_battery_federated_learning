@@ -45,7 +45,7 @@ import numpy as np
 import pandas as pd
 
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from typing import Any, Literal
 
 # ---------------------------------------------------------------------------
@@ -68,15 +68,50 @@ def coulomb_capacity(time_s: np.ndarray, current_a: np.ndarray) -> float:
 # Feature extraction
 # ---------------------------------------------------------------------------
 
+def _safe_series(df: pd.DataFrame, column: str, fallback: float = 0.0) -> np.ndarray:
+    """Return a numeric NumPy array for a column or a fallback array if missing."""
+    if column not in df.columns:
+        return np.full(len(df), fallback, dtype=np.float64)
+    values = pd.to_numeric(df[column], errors="coerce").to_numpy(dtype=np.float64)
+    if np.isnan(values).all():
+        return np.full(len(df), fallback, dtype=np.float64)
+    fill_value = np.nanmean(values) if not np.isnan(np.nanmean(values)) else fallback
+    return np.nan_to_num(values, nan=fill_value)
+
+
 def extract_voltage_features(df: pd.DataFrame) -> list[float]:
-    """Return [V_mean, V_min, V_std, V_area] from a discharge DataFrame."""
-    v = df["Voltage_measured"].values
-    t = df["Time"].values
+    """Extract a richer set of discharge-shape features for SOH prediction."""
+    v = _safe_series(df, "Voltage_measured")
+    t = _safe_series(df, "Time")
+    current = _safe_series(df, "Current_measured")
+    temperature = _safe_series(df, "Temperature_measured")
+
+    duration = float(max(t.max() - t.min(), 1e-9))
+    dv_dt = np.gradient(v, t, edge_order=1) if len(v) > 1 else np.array([0.0])
+    abs_current = np.abs(current)
+
     return [
         float(v.mean()),
         float(v.min()),
+        float(v.max()),
         float(v.std()),
-        float(np.trapz(v, t)),
+        float(v.max() - v.min()),
+        float(np.percentile(v, 10)),
+        float(np.percentile(v, 50)),
+        float(np.percentile(v, 90)),
+        float(np.trapezoid(v, t)),
+        float(duration),
+        float(v[0]),
+        float(v[-1]),
+        float(v[-1] - v[0]),
+        float(dv_dt.mean()),
+        float(dv_dt.std()),
+        float(current.mean()),
+        float(current.std()),
+        float(abs_current.mean()),
+        float(np.trapezoid(abs_current, t)),
+        float(temperature.mean()),
+        float(temperature.std()),
     ]
 
 
@@ -134,6 +169,72 @@ def _build_global_dataset(
         np.array(bat_rows),
         fname_rows,
     )
+
+
+def build_global_dataset(
+    base_path: str,
+    metadata_path: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    """Public wrapper returning the full SOH dataset before any splitting."""
+    return _build_global_dataset(base_path, metadata_path)
+
+
+def split_global_dataset(
+    X_all: np.ndarray,
+    SOH_all: np.ndarray,
+    battery_ids: np.ndarray,
+    filenames: list[str],
+    global_test_size: float = 0.2,
+    random_state: int = 42,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str], list[str]]:
+    """Create one shared global train/test split for both centralized and FL runs."""
+    from sklearn.model_selection import train_test_split
+
+    indices = np.arange(len(X_all))
+    train_idx, test_idx = train_test_split(
+        indices,
+        test_size=global_test_size,
+        random_state=random_state,
+    )
+    filenames_arr = np.asarray(filenames, dtype=object)
+    return (
+        X_all[train_idx],
+        X_all[test_idx],
+        SOH_all[train_idx],
+        SOH_all[test_idx],
+        battery_ids[train_idx],
+        battery_ids[test_idx],
+        filenames_arr[train_idx].tolist(),
+        filenames_arr[test_idx].tolist(),
+    )
+
+
+def load_global_splits(
+    base_path: str,
+    metadata_path: str,
+    global_test_size: float = 0.2,
+    random_state: int = 42,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str], list[str]]:
+    """Build the full dataset and return a shared global train/test split."""
+    X_all, SOH_all, battery_ids, filenames = build_global_dataset(base_path, metadata_path)
+    return split_global_dataset(
+        X_all,
+        SOH_all,
+        battery_ids,
+        filenames,
+        global_test_size=global_test_size,
+        random_state=random_state,
+    )
+
+
+def get_raw_bytes_for_filenames(base_path: str, filenames: list[str]) -> int:
+    """Return the total on-disk size for the given discharge CSV filenames."""
+    total = 0
+    for fname in filenames:
+        fp = os.path.join(base_path, str(fname))
+        if os.path.exists(fp):
+            total += os.path.getsize(fp)
+    return total
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +351,7 @@ def load_data(
     num_partitions: int,
     test_size: float = 0.2,
     random_state: int = 42,
+    global_test_size: float = 0.2,
     partition_strategy: Literal["iid", "by_battery", "dirichlet"] = "by_battery",
     dirichlet_alpha: float = 0.5,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -273,21 +375,47 @@ def load_data(
     """
     from sklearn.model_selection import train_test_split
 
-    X_all, SOH_all, battery_ids, _ = _build_global_dataset(base_path, metadata_path)
+    (
+        X_train_pool,
+        _X_test_global,
+        y_train_pool,
+        _y_test_global,
+        train_battery_ids,
+        _test_battery_ids,
+        _train_filenames,
+        _test_filenames,
+    ) = load_global_splits(
+        base_path=base_path,
+        metadata_path=metadata_path,
+        global_test_size=global_test_size,
+        random_state=random_state,
+    )
 
     if partition_strategy == "iid":
         X_part, y_part = _partition_iid(
-            X_all, SOH_all, partition_id, num_partitions, random_state
+            X_train_pool,
+            y_train_pool,
+            partition_id,
+            num_partitions,
+            random_state,
         )
     elif partition_strategy == "by_battery":
         X_part, y_part = _partition_by_battery(
-            X_all, SOH_all, battery_ids, partition_id, num_partitions
+            X_train_pool,
+            y_train_pool,
+            train_battery_ids,
+            partition_id,
+            num_partitions,
         )
     elif partition_strategy == "dirichlet":
         X_part, y_part = _partition_dirichlet(
-            X_all, SOH_all, battery_ids,
-            partition_id, num_partitions,
-            dirichlet_alpha, random_state,
+            X_train_pool,
+            y_train_pool,
+            train_battery_ids,
+            partition_id,
+            num_partitions,
+            dirichlet_alpha,
+            random_state,
         )
     else:
         raise ValueError(
@@ -352,18 +480,27 @@ class FederatedForest:
 
     def __init__(self) -> None:
         self.forests: list[RandomForestRegressor] = []
+        self.weights: list[float] = []
 
-    def add(self, rf: RandomForestRegressor) -> None:
+    def add(self, rf: RandomForestRegressor, weight: float = 1.0) -> None:
         self.forests.append(rf)
+        self.weights.append(max(float(weight), 1.0))
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         if not self.forests:
             raise RuntimeError("No forests added yet.")
         preds = np.stack([f.predict(X) for f in self.forests], axis=0)
-        return preds.mean(axis=0)
+        weights = np.asarray(self.weights, dtype=np.float64)
+        weights = weights / weights.sum()
+        return np.average(preds, axis=0, weights=weights)
 
     def clear(self) -> None:
         self.forests.clear()
+        self.weights.clear()
+
+    def extend(self, other: "FederatedForest") -> None:
+        for forest, weight in zip(other.forests, other.weights):
+            self.add(forest, weight)
 
     def to_bytes(self) -> bytes:
         return pickle.dumps(self)
@@ -382,6 +519,9 @@ def train(
     y_train: np.ndarray,
     n_estimators: int = 100,
     random_state: int = 42,
+    max_depth: int | None = None,
+    min_samples_leaf: int = 1,
+    max_features: str | int | float | None = "sqrt",
 ) -> tuple[RandomForestRegressor, dict[str, Any]]:
     """
     Fit a RandomForestRegressor and return (model, benchmark_metrics).
@@ -389,16 +529,26 @@ def train(
     """
     tracemalloc.start()
     t0 = time.perf_counter()
+    cpu_t0 = time.process_time()
 
-    rf = RandomForestRegressor(n_estimators=n_estimators, random_state=random_state)
+    rf = RandomForestRegressor(
+        n_estimators=n_estimators,
+        random_state=random_state,
+        max_depth=max_depth,
+        min_samples_leaf=min_samples_leaf,
+        max_features=max_features,
+        n_jobs=1,
+    )
     rf.fit(X_train, y_train)
 
     train_time = time.perf_counter() - t0
+    cpu_time = time.process_time() - cpu_t0
     _, peak_mem = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
     metrics = {
         "train_time_s": train_time,
+        "cpu_time_s": cpu_time,
         "peak_memory_kb": peak_mem / 1024,
         "model_size_bytes": get_model_size_bytes(rf),
         "n_train_samples": len(X_train),
@@ -423,5 +573,12 @@ def evaluate(
     mae = float(mean_absolute_error(y_test, y_pred))
     mse = float(mean_squared_error(y_test, y_pred))
     rmse = float(np.sqrt(mse))
+    r2 = float(r2_score(y_test, y_pred))
     acc_1pct = float(np.mean(np.abs(y_pred - y_test) < 0.01))
-    return {"mae": mae, "mse": mse, "rmse": rmse, "accuracy_1pct": acc_1pct}
+    return {
+        "mae": mae,
+        "mse": mse,
+        "rmse": rmse,
+        "r2": r2,
+        "accuracy_1pct": acc_1pct,
+    }
