@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 
-base_path = "../../cleaned_dataset/data"
+base_path = "../../nasa-battery-dataset/cleaned_dataset/data"
 file_path = "../../cleaned_dataset/data/00001.csv"  
 metadata = pd.read_csv("../../cleaned_dataset/metadata.csv")
 
