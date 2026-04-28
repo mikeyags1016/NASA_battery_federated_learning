@@ -58,9 +58,28 @@ dirichlet-alpha     = 0.5   # only used when partition-strategy = "dirichlet"
 # Output
 benchmark-output = "benchmark_report.json"
 
-[tool.flwr.federations.local-simulation]
-options.num-supernodes = 5
 
-[tool.flwr.federations.local-simulation.options.backend.client-resources]
-num-cpus = 1
-num-gpus = 0.0
+#######################################################################
+# CONFIGURATION MIGRATION NOTICE:
+#
+# What was previously called "federation config" for SuperLink
+# connections in pyproject.toml has been renamed and moved.
+#
+# These settings are now **SuperLink connection configuration**
+# and are defined in the Flower configuration file.
+#
+# The entries below are commented out intentionally and are kept
+# only as a migration reference.
+#
+# Docs: https://flower.ai/docs/framework/ref-flower-configuration.html
+#######################################################################
+
+# [tool.flwr.federations]
+# default = "local-simulation"
+
+# [tool.flwr.federations.local-simulation]
+# options.num-supernodes = 5
+
+# [tool.flwr.federations.local-simulation.options.backend.client-resources]
+# num-cpus = 1
+# num-gpus = 0.0
