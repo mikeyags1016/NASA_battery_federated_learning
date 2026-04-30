@@ -1,2 +1,23 @@
-venv/
-_pycache_/
+# OS-generated files
+**/.DS_Store
+# Compiled/build files
+**/*.o
+**/*.obj
+**/*.pyc
+**/*.class
+**/*.exe
+**/*.dll
+**/*.lib
+# Temporary/log files
+**/*.log
+**/*.temp
+**/*.tmp
+**/*.csv
+# Dependency directories
+**/target/
+**/build/
+# Editor/IDE-specific files and directories
+**/.vscode/
+**/*.swp
+# All log tracking files
+*.txt
