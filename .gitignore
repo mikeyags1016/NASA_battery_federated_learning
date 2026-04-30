@@ -1,5 +1,6 @@
 # OS-generated files
 **/.DS_Store
+
 # Compiled/build files
 **/*.o
 **/*.obj
@@ -8,16 +9,26 @@
 **/*.exe
 **/*.dll
 **/*.lib
+**/__pycache__/
+
 # Temporary/log files
 **/*.log
 **/*.temp
 **/*.tmp
 **/*.csv
+
 # Dependency directories
 **/target/
 **/build/
+
 # Editor/IDE-specific files and directories
 **/.vscode/
 **/*.swp
+
 # All log tracking files
 *.txt
+
+# Output and report files
+**/*.png
+**/*.json
+**/*.md      # if you want to ignore summary.md too
