@@ -55,12 +55,18 @@ def _plot_model_comparison(results: dict[str, dict], output_path: Path) -> None:
 
     fig, axes = plt.subplots(2, 3, figsize=(16, 8), constrained_layout=True)
     fig.suptitle("SOH Model Comparison", fontsize=16, fontweight="bold")
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd", "#8c564b"]
 
     for ax, (key, title, lower_is_better) in zip(axes.flat, metrics):
         values = [float(summary[key]) for summary in summaries]
-        ax.bar(labels, values, color=colors[: len(labels)])
+        x = np.arange(len(labels))
+        ax.bar(x, values, color=colors[: len(labels)])
         ax.set_title(title)
+        ax.set_ylabel(title)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=18, ha="right")
+        ax.set_xlim(-0.6, len(labels) - 0.4)
+        ax.margins(y=0.18)
         ax.grid(axis="y", linestyle=":", alpha=0.35)
         best_idx = int(np.argmin(values) if lower_is_better else np.argmax(values))
         for idx, value in enumerate(values):
