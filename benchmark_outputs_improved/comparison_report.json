@@ -12,7 +12,7 @@
   "traditional": {
     "mode": "traditional",
     "num_rounds": 1,
-    "total_wall_time_s": 9.764,
+    "total_wall_time_s": 10.889,
     "total_bytes_uploaded_MB": 45.2217,
     "total_bytes_downloaded_MB": 191.4887,
     "total_bytes_transmitted_MB": 236.7104,
@@ -20,9 +20,9 @@
     "final_global_rmse": 1.985607,
     "final_global_r2": 0.886823,
     "final_global_accuracy_1pct": 0.417,
-    "avg_round_time_s": 9.764,
-    "avg_client_cpu_time_s": 9.406,
-    "avg_client_peak_memory_kb": 505.01,
+    "avg_round_time_s": 10.889,
+    "avg_client_cpu_time_s": 10.109,
+    "avg_client_peak_memory_kb": 492.95,
     "num_train_samples": 2215,
     "num_test_samples": 554,
     "num_satellites": 5,
@@ -33,7 +33,7 @@
   "federated": {
     "mode": "federated",
     "num_rounds": 3,
-    "total_wall_time_s": 57.661,
+    "total_wall_time_s": 401.541,
     "total_bytes_uploaded_MB": 6.9527,
     "total_bytes_downloaded_MB": 69.5244,
     "total_bytes_transmitted_MB": 76.477,
@@ -41,17 +41,17 @@
     "final_global_rmse": 5.665194,
     "final_global_r2": 0.078697,
     "final_global_accuracy_1pct": 0.0,
-    "avg_round_time_s": 16.382,
-    "avg_client_cpu_time_s": 0.495,
-    "avg_client_peak_memory_kb": 117.05
+    "avg_round_time_s": 113.183,
+    "avg_client_cpu_time_s": 1.504,
+    "avg_client_peak_memory_kb": 117.46
   },
   "derived_metrics": {
     "traditional_total_mb_per_satellite": 47.342079999999996,
     "federated_total_mb_per_satellite": 15.2954,
-    "traditional_accuracy_1pct_per_second": 0.04270790659565752,
+    "traditional_accuracy_1pct_per_second": 0.03829552759665718,
     "federated_accuracy_1pct_per_second": 0.0,
-    "traditional_r2_per_second": 0.09082578861122492,
-    "federated_r2_per_second": 0.0013648219767260366
+    "traditional_r2_per_second": 0.08144209752961705,
+    "federated_r2_per_second": 0.00019598745831683441
   },
   "winner_by_metric": {
     "mae": "traditional",

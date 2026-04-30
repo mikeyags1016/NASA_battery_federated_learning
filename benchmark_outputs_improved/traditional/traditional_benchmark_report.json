@@ -2,7 +2,7 @@
   "summary": {
     "mode": "traditional",
     "num_rounds": 1,
-    "total_wall_time_s": 9.764,
+    "total_wall_time_s": 10.889,
     "total_bytes_uploaded_MB": 45.2217,
     "total_bytes_downloaded_MB": 191.4887,
     "total_bytes_transmitted_MB": 236.7104,
@@ -10,9 +10,9 @@
     "final_global_rmse": 1.985607,
     "final_global_r2": 0.886823,
     "final_global_accuracy_1pct": 0.417,
-    "avg_round_time_s": 9.764,
-    "avg_client_cpu_time_s": 9.406,
-    "avg_client_peak_memory_kb": 505.01
+    "avg_round_time_s": 10.889,
+    "avg_client_cpu_time_s": 10.109,
+    "avg_client_peak_memory_kb": 492.95
   },
   "rounds": [
     {
@@ -21,10 +21,10 @@
       "bytes_received_from_clients": 47418400,
       "num_clients_trained": 5,
       "num_clients_evaluated": 1,
-      "round_wall_time_s": 9.764046100026462,
-      "avg_client_train_time_s": 9.764046100026462,
-      "avg_client_cpu_time_s": 9.40625,
-      "avg_client_peak_memory_kb": 505.005859375,
+      "round_wall_time_s": 10.888661500008311,
+      "avg_client_train_time_s": 10.888661500008311,
+      "avg_client_cpu_time_s": 10.109375,
+      "avg_client_peak_memory_kb": 492.947265625,
       "avg_train_loss": 0.6308578609285782,
       "avg_eval_mae": 0.6308578609285782,
       "avg_eval_rmse": 1.9856072089417114,
