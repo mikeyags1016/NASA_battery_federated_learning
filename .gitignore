@@ -31,4 +31,4 @@
 # Output and report files
 **/*.png
 **/*.json
-**/*.md      # if you want to ignore summary.md too
+**/*.md
