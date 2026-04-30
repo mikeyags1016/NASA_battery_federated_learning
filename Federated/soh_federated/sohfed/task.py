@@ -61,7 +61,7 @@ BENCHMARK_LOG: list[dict] = []
 def coulomb_capacity(time_s: np.ndarray, current_a: np.ndarray) -> float:
     """Compute capacity in Ah via Coulomb counting (trapezoidal integration)."""
     time_h = time_s / 3600.0
-    return float(np.trapezoid(np.abs(current_a), time_h))
+    return float(np.trapz(np.abs(current_a), time_h))
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ def extract_voltage_features(df: pd.DataFrame) -> list[float]:
         float(np.percentile(v, 10)),
         float(np.percentile(v, 50)),
         float(np.percentile(v, 90)),
-        float(np.trapezoid(v, t)),
+        float(np.trapz(v, t)),
         float(duration),
         float(v[0]),
         float(v[-1]),
@@ -109,7 +109,7 @@ def extract_voltage_features(df: pd.DataFrame) -> list[float]:
         float(current.mean()),
         float(current.std()),
         float(abs_current.mean()),
-        float(np.trapezoid(abs_current, t)),
+        float(np.trapz(abs_current, t)),
         float(temperature.mean()),
         float(temperature.std()),
     ]
