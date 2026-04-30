@@ -34,7 +34,7 @@ data-base-path    = "../../cleaned_dataset/data"
 metadata-path     = "../../cleaned_dataset/metadata.csv"
 
 # Training
-num-server-rounds   = 3
+num-server-rounds   = 1
 n-estimators        = 100
 max-depth           = 10
 min-samples-leaf    = 2

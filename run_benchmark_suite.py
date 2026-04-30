@@ -6,6 +6,9 @@ import os
 import sys
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -187,8 +190,8 @@ def write_summary_markdown(comparison: dict, output_path: str) -> None:
             "",
             "## Next Step",
             "",
-            "- Keep federated at 1 round for now, because the current random-forest aggregation method does not improve across additional rounds.",
-            "- If you want a multi-round federated curve that genuinely improves, the federated algorithm needs to evolve the global model across rounds instead of rebuilding the same ensemble.",
+            "- Treat the Random Forest federated path as a one-shot ensemble baseline; extra rounds add independently seeded forests rather than optimizing a shared model.",
+            "- For a multi-round federated curve that genuinely improves, move the SOH task to an iterative method such as gradient-based FedAvg or boosted trees.",
         ]
     )
 

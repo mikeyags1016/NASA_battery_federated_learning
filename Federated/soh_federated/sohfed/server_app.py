@@ -255,9 +255,10 @@ def server_fn(context: Context) -> fl.server.Server:
         min_available_clients=int(cfg.get("min-available-clients", 2)),
         fraction_fit=float(cfg.get("fraction-fit", 1.0)),
         fraction_evaluate=float(cfg.get("fraction-evaluate", 1.0)),
+        on_fit_config_fn=on_fit_config_fn,
     )
 
-    num_rounds = int(cfg.get("num-server-rounds", 3))
+    num_rounds = int(cfg.get("num-server-rounds", 1))
     server_config = ServerConfig(num_rounds=num_rounds)
 
     return fl.server.Server(

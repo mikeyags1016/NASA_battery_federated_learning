@@ -125,32 +125,34 @@ def _build_global_dataset(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
     """
     Read all discharge files and return:
-        X_all        : (N, 4) voltage features
+        X_all        : (N, 21) voltage/discharge-shape features
         SOH_all      : (N,)   Coulomb-counting SOH (normalised per battery)
         battery_ids  : (N,)   battery_id string for each row
         filenames    : list of N filenames (in row order)
 
-    SOH normalisation: each battery's capacity sequence is divided by *its own*
-    first discharge capacity, not the global first.  This matches the
-    per-battery SoH definition in your Kaggle notebook.
+    SOH normalisation: each battery's capacity sequence is divided by that
+    battery's maximum positive discharge capacity. Some NASA rows are partial
+    or failed cycles with tiny/zero capacities; using the first cycle as the
+    denominator can inflate SOH into the 20x range for those batteries.
     """
     metadata = pd.read_csv(metadata_path)
     discharge_meta = metadata[metadata["type"].str.lower() == "discharge"].copy()
     discharge_meta["Capacity"] = pd.to_numeric(
         discharge_meta["Capacity"], errors="coerce"
     )
-    discharge_meta = discharge_meta.dropna(subset=["Capacity"]).reset_index(drop=True)
+    discharge_meta = discharge_meta.dropna(subset=["Capacity"])
+    discharge_meta = discharge_meta[discharge_meta["Capacity"] > 0].reset_index(drop=True)
 
     X_rows: list[list[float]] = []
     soh_rows: list[float] = []
     bat_rows: list[str] = []
     fname_rows: list[str] = []
 
-    # Process per battery so SOH is normalised correctly
+    # Process per battery so SOH is normalised correctly.
     for bat_id, grp in discharge_meta.groupby("battery_id", sort=True):
         grp = grp.sort_values("start_time").reset_index(drop=True)
-        cap0 = grp["Capacity"].iloc[0]
-        if cap0 == 0:
+        nominal_capacity = float(grp["Capacity"].max())
+        if nominal_capacity <= 0:
             continue
         for _, row in grp.iterrows():
             fname = str(row["filename"])
@@ -159,7 +161,7 @@ def _build_global_dataset(
                 continue
             df = pd.read_csv(fp)
             X_rows.append(extract_voltage_features(df))
-            soh_rows.append(float(row["Capacity"]) / cap0)
+            soh_rows.append(float(row["Capacity"]) / nominal_capacity)
             bat_rows.append(str(bat_id))
             fname_rows.append(fname)
 
@@ -284,7 +286,7 @@ def _partition_by_battery(
     assigned = battery_chunks[partition_id % num_partitions]
     mask = np.isin(battery_ids, assigned)
     print(
-        f"  [Partition {partition_id}] by_battery → "
+        f"  [Partition {partition_id}] by_battery -> "
         f"batteries {list(assigned)}  ({mask.sum()} cycles)"
     )
     return X[mask], SOH[mask]
@@ -334,7 +336,7 @@ def _partition_dirichlet(
 
     idx = np.array(selected_indices)
     print(
-        f"  [Partition {partition_id}] dirichlet(α={alpha}) → "
+        f"  [Partition {partition_id}] dirichlet(alpha={alpha}) -> "
         f"{len(idx)} cycles"
     )
     return X[idx], SOH[idx]

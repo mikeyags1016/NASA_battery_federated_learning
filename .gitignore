@@ -4,6 +4,7 @@
 **/*.o
 **/*.obj
 **/*.pyc
+**/__pycache__/
 **/*.class
 **/*.exe
 **/*.dll
@@ -21,3 +22,8 @@
 **/*.swp
 # All log tracking files
 *.txt
+
+# Generated benchmark artifacts
+benchmark_outputs_latest/
+benchmark_outputs_fixed_smoke/
+results_xgboost/
