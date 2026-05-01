@@ -97,7 +97,7 @@ C:\Code\flower\NASA_battery_federated_learning
 Download the dataset from Kaggle:
 
 ```text
-www.kaggle.com/dataset/patrickfleith/nasa-battery-dataset
+www.kaggle.com/datasets/patrickfleith/nasa-battery-dataset
 ```
 
 After downloading and extracting it, arrange the files so the project can find:
