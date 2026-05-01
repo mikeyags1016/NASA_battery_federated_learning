@@ -6,6 +6,9 @@ import os
 import sys
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -144,6 +147,8 @@ def _plot_grouped_bar(ax, title: str, values: dict[str, float], color_a: str, co
     ax.set_title(title, fontsize=10)
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=20, ha="right")
+    ax.set_xlim(-0.65, len(labels) - 0.35)
+    ax.set_ylabel("Value")
     ax.grid(axis="y", linestyle=":", alpha=0.35)
     for bars in ax.containers:
         labels = []
@@ -151,6 +156,9 @@ def _plot_grouped_bar(ax, title: str, values: dict[str, float], color_a: str, co
             height = bar.get_height()
             labels.append(f"{height:.3f}" if abs(height) < 100 else f"{height:.1f}")
         ax.bar_label(bars, labels=labels, padding=3, fontsize=8)
+    ymin, ymax = ax.get_ylim()
+    if ymax > ymin:
+        ax.set_ylim(ymin, ymax + (ymax - ymin) * 0.12)
 
 
 def write_summary_markdown(comparison: dict, output_path: str) -> None:
@@ -187,8 +195,8 @@ def write_summary_markdown(comparison: dict, output_path: str) -> None:
             "",
             "## Next Step",
             "",
-            "- Keep federated at 1 round for now, because the current random-forest aggregation method does not improve across additional rounds.",
-            "- If you want a multi-round federated curve that genuinely improves, the federated algorithm needs to evolve the global model across rounds instead of rebuilding the same ensemble.",
+            "- Treat the Random Forest federated path as a one-shot ensemble baseline; extra rounds add independently seeded forests rather than optimizing a shared model.",
+            "- For a multi-round federated curve that genuinely improves, move the SOH task to an iterative method such as gradient-based FedAvg or boosted trees.",
         ]
     )
 
@@ -341,6 +349,7 @@ def plot_comparison_dashboard(comparison: dict, output_path: str) -> None:
     axes[2, 0].set_xlim(0, 1)
     axes[2, 0].set_xticks([0, 1])
     axes[2, 0].set_xticklabels(["Traditional", "Federated"])
+    axes[2, 0].set_xlabel("Winning method")
 
     trad_vals = [
         traditional["final_global_mae"],
@@ -361,6 +370,8 @@ def plot_comparison_dashboard(comparison: dict, output_path: str) -> None:
     axes[2, 1].set_xticks(x)
     axes[2, 1].set_xticklabels(labels)
     axes[2, 1].set_title("Final Metric Profile")
+    axes[2, 1].set_ylabel("Value")
+    axes[2, 1].set_xlim(-0.25, len(labels) - 0.75)
     axes[2, 1].grid(axis="y", linestyle=":", alpha=0.35)
     axes[2, 1].legend()
 
@@ -370,7 +381,9 @@ def plot_comparison_dashboard(comparison: dict, output_path: str) -> None:
         color=[color_trad, color_fed],
     )
     axes[2, 2].set_title("Total Communication (MB)")
+    axes[2, 2].set_ylabel("MB")
     axes[2, 2].grid(axis="y", linestyle=":", alpha=0.35)
+    axes[2, 2].margins(x=0.25, y=0.18)
     for i, value in enumerate([traditional["total_bytes_transmitted_MB"], federated["total_bytes_transmitted_MB"]]):
         axes[2, 2].text(i, value, f"{value:.1f}", ha="center", va="bottom", fontsize=9)
 
@@ -380,7 +393,9 @@ def plot_comparison_dashboard(comparison: dict, output_path: str) -> None:
         color=[color_trad, color_fed],
     )
     axes[2, 3].set_title("Total Wall Time (s)")
+    axes[2, 3].set_ylabel("Seconds")
     axes[2, 3].grid(axis="y", linestyle=":", alpha=0.35)
+    axes[2, 3].margins(x=0.25, y=0.18)
     for i, value in enumerate([traditional["total_wall_time_s"], federated["total_wall_time_s"]]):
         axes[2, 3].text(i, value, f"{value:.2f}", ha="center", va="bottom", fontsize=9)
 
@@ -413,17 +428,27 @@ def plot_federated_rounds(federated_report: dict, output_path: str) -> None:
     fig.suptitle("Federated Round Metrics", fontsize=16, fontweight="bold")
 
     plots = [
-        (axes[0, 0], mae, "Global MAE"),
-        (axes[0, 1], rmse, "Global RMSE"),
-        (axes[0, 2], acc, "Accuracy (<1% abs err)"),
-        (axes[1, 0], total_mb, "Communication / Round (MB)"),
-        (axes[1, 1], wall, "Round Wall Time (s)"),
-        (axes[1, 2], train_time, "Avg Client Train Time (s)"),
+        (axes[0, 0], mae, "Global MAE", "MAE"),
+        (axes[0, 1], rmse, "Global RMSE", "RMSE"),
+        (axes[0, 2], acc, "Accuracy (<1% abs err)", "Fraction"),
+        (axes[1, 0], total_mb, "Communication / Round (MB)", "MB"),
+        (axes[1, 1], wall, "Round Wall Time (s)", "Seconds"),
+        (axes[1, 2], train_time, "Avg Client Train Time (s)", "Seconds"),
     ]
-    for ax, vals, title in plots:
+    max_ticks = 12
+    tick_step = max(1, int(np.ceil(len(round_ids) / max_ticks)))
+    tick_ids = round_ids[::tick_step]
+    if round_ids[-1] not in tick_ids:
+        tick_ids.append(round_ids[-1])
+
+    for ax, vals, title, ylabel in plots:
         ax.plot(round_ids, vals, marker="o", linewidth=2, color="#0f6cbd")
         ax.set_title(title)
-        ax.set_xticks(round_ids)
+        ax.set_xlabel("Round")
+        ax.set_ylabel(ylabel)
+        ax.set_xticks(tick_ids)
+        ax.set_xlim(min(round_ids) - 0.5, max(round_ids) + 0.5)
+        ax.margins(y=0.15)
         ax.grid(True, linestyle=":", alpha=0.35)
 
     fig.savefig(output_path, dpi=160, bbox_inches="tight")

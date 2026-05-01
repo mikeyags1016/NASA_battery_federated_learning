@@ -31,6 +31,9 @@ import tracemalloc
 from typing import Any
 
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
@@ -70,6 +73,15 @@ from sohfed.benchmarks import BenchmarkReport, RoundMetrics
 
 
 # ---------------------------------------------------------------------------
+# Round config
+# ---------------------------------------------------------------------------
+
+def on_fit_config_fn(server_round: int) -> dict[str, Scalar]:
+    """Send the current server round to clients for round-specific training."""
+    return {"server_round": server_round}
+
+
+# ---------------------------------------------------------------------------
 # Inline client function (used by flwr.simulation)
 # ---------------------------------------------------------------------------
 
@@ -87,8 +99,9 @@ def build_client_fn(
 ):
     """Return a closure compatible with flwr.simulation.start_simulation."""
 
-    def client_fn(cid: str) -> fl.client.NumPyClient:
-        partition_id = int(cid)
+    def client_fn(context) -> fl.client.Client:
+        partition_id = int(context.node_config.get("partition-id", 0))
+        cid = str(partition_id)
 
         (X_train, X_test, y_train, y_test) = load_data(
             base_path=base_path,
@@ -164,7 +177,7 @@ def build_client_fn(
                     "accuracy_1pct": eval_m["accuracy_1pct"],
                 }
 
-        return _Client()
+        return _Client().to_client()
 
     return client_fn
 
@@ -180,12 +193,12 @@ class BenchmarkStrategy(FedAvg):
         metadata_path: str,
         num_partitions: int,
         global_test_size: float = 0.2,
-        benchmark_output: str = None,  # ← ADD THIS LINE
+        benchmark_output: str = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.report = BenchmarkReport(mode="federated")
-        self.benchmark_output = benchmark_output  # ← ADD THIS LINE (optional)
+        self.benchmark_output = benchmark_output
         self._round_start = time.perf_counter()
         self._total_start = time.perf_counter()
         self.global_forest = FederatedForest()
@@ -265,7 +278,7 @@ class BenchmarkStrategy(FedAvg):
 
         total_tx = rm.bytes_sent_to_clients + rm.bytes_received_from_clients
         print(
-            f"\n[Server] ─── Round {server_round} ───\n"
+            f"\n[Server] --- Round {server_round} ---\n"
             f"  clients trained   : {rm.num_clients_trained}\n"
             f"  global MAE        : {rm.global_mae:.5f}\n"
             f"  global RMSE       : {rm.global_rmse:.5f}\n"
@@ -323,7 +336,7 @@ def plot_benchmarks(report: BenchmarkReport, output_dir: str) -> None:
 
     fig = plt.figure(figsize=(16, 10), facecolor="#0d1117")
     fig.suptitle(
-        "Federated SOH Estimation — Benchmark Dashboard",
+        "Federated SOH Estimation - Benchmark Dashboard",
         fontsize=16, color="white", fontweight="bold", y=0.98,
     )
 
@@ -464,6 +477,7 @@ def run_simulation_benchmark(
         min_available_clients=num_clients,
         fraction_fit=1.0,
         fraction_evaluate=1.0,
+        on_fit_config_fn=on_fit_config_fn,
     )
 
     client_fn = build_client_fn(
@@ -519,23 +533,23 @@ def main() -> None:
         choices=["iid", "by_battery", "dirichlet"],
         help=(
             "How to split data across clients:\n"
-            "  iid         — random equal slices (FL baseline, unrealistic)\n"
-            "  by_battery  — each client owns whole batteries (most realistic)\n"
-            "  dirichlet   — probabilistic skew via Dirichlet(alpha)"
+            "  iid         - random equal slices (FL baseline, unrealistic)\n"
+            "  by_battery  - each client owns whole batteries (most realistic)\n"
+            "  dirichlet   - probabilistic skew via Dirichlet(alpha)"
         ),
     )
     parser.add_argument(
         "--dirichlet-alpha",
         type=float,
         default=0.5,
-        help="α for Dirichlet partitioning. Lower → more non-IID. (default: 0.5)",
+        help="Alpha for Dirichlet partitioning. Lower means more non-IID. (default: 0.5)",
     )
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
 
     print("=" * 60)
-    print("  Federated SOH Estimation — Flower Simulation")
+    print("  Federated SOH Estimation - Flower Simulation")
     print("=" * 60)
     print(f"  data path          : {args.data_path}")
     print(f"  metadata           : {args.metadata_path}")
@@ -544,7 +558,7 @@ def main() -> None:
     print(f"  n_estimators       : {args.n_estimators}")
     print(f"  partition strategy : {args.partition_strategy}", end="")
     if args.partition_strategy == "dirichlet":
-        print(f"  (α={args.dirichlet_alpha})", end="")
+        print(f"  (alpha={args.dirichlet_alpha})", end="")
     print(f"\n  output dir         : {args.output_dir}")
     print("=" * 60 + "\n")
 

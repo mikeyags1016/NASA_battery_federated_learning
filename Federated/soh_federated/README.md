@@ -35,11 +35,17 @@ Because `RandomForestRegressor` is not a gradient-based model, classical FedAvg
 4. The aggregated `FederatedForest` is sent back to clients for evaluation.
 
 This is equivalent to training a large ensemble whose trees are distributed across clients.
+It is a strong one-shot federated baseline, not a true iterative optimizer:
+additional Random Forest rounds add more independently seeded local forests, but
+they do not refine a shared model the way FedAvg or boosting would.
 
 ### Data Partitioning
 
 Discharge files listed in `metadata.csv` are split evenly across `N` clients.
 Each client sees an independent 80/20 train-test split of its local partition.
+SOH labels are normalized per battery by the maximum positive discharge
+capacity; zero-capacity and missing-capacity discharge rows are excluded as
+invalid target records.
 
 ---
 
@@ -80,7 +86,7 @@ python simulate.py \
     --data-path     /path/to/cleaned_dataset/data \
     --metadata-path /path/to/cleaned_dataset/metadata.csv \
     --num-clients   5 \
-    --num-rounds    3 \
+    --num-rounds    1 \
     --n-estimators  100 \
     --output-dir    ./results
 ```
@@ -96,7 +102,7 @@ flwr run . --stream
 
 Override config on the fly:
 ```bash
-flwr run . --stream --run-config "num-server-rounds=5 n-estimators=200"
+flwr run . --stream --run-config "num-server-rounds=3 n-estimators=200"
 ```
 
 Scale to more clients:
@@ -129,7 +135,7 @@ After a run you'll find in `./results/`:
 |------------------------|---------|----------------------------------------|
 | `data-base-path`       | —       | Directory containing discharge CSVs   |
 | `metadata-path`        | —       | Path to `metadata.csv`                |
-| `num-server-rounds`    | 3       | Number of FL rounds                    |
+| `num-server-rounds`    | 1       | Number of RF ensemble rounds           |
 | `n-estimators`         | 100     | Trees per client RandomForest          |
 | `test-size`            | 0.2     | Fraction held out for local testing   |
 | `fraction-fit`         | 1.0     | Fraction of clients trained per round |
