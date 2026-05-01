@@ -59,7 +59,7 @@ def extract_voltage_features(df):
     features['V_mean'] = v.mean()
     features['V_min'] = v.min()
     features['V_std'] = v.std()
-    features['V_area'] = np.trapezoid(v, t)
+    features['V_area'] = np.trapz(v, t)
     
     return features
 
