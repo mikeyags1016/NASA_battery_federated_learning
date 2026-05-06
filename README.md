@@ -17,9 +17,12 @@ This guide assumes Windows PowerShell.
 Install these first:
 
 - Git: https://git-scm.com/downloads
-- Python 3.11: https://www.python.org/downloads/release/python-311/
+- Python 3.11: https://www.python.org/downloads/release/python-3110/  or by running
+```powershell
+winget install -e --id Python.Python.3.11
+``` 
 - A GitHub account with SSH access configured
-- A Kaggle account
+- A Kaggle account (required for dataset download)
 
 Confirm Git and Python are available:
 
