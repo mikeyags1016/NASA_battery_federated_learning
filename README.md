@@ -97,7 +97,7 @@ C:\Code\flower\NASA_battery_federated_learning
 
 ## 5. Download the Dataset
 
-Download the dataset from Kaggle:
+Download the dataset .zip from Kaggle:
 
 ```text
 https://www.kaggle.com/datasets/patrickfleith/nasa-battery-dataset 
