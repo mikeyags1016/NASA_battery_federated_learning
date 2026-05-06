@@ -177,7 +177,15 @@ Install project dependencies:
 
 ```powershell
 python -m pip install -r requirements.txt
+python -m pip install scikit-learn
+python -m pip install matplot
+python -m pip install pandas
+python -m pip install flwr==1.14
+python -m pip install -U "flwr[simulation]"
+python -m pip install xgboost
+
 ```
+
 
 This installs Flower, scikit-learn, matplotlib, XGBoost, and the other required
 libraries.
@@ -191,7 +199,7 @@ python run_all_results.py --include-xgboost
 ```
 
 This may take a while because it trains several models and runs Flower
-simulations.
+simulations. Warning may be ignored
 
 Results are written to:
 
