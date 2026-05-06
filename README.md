@@ -17,7 +17,7 @@ This guide assumes Windows PowerShell.
 Install these first:
 
 - Git: https://git-scm.com/downloads
-- Python 3.11: https://www.python.org/downloads/release/python-311/
+- Python 3.11: (https://www.python.org/downloads/release/python-3110/)
 - A GitHub account with SSH access configured
 - A Kaggle account
 
