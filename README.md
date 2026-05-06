@@ -22,7 +22,7 @@ Install these first:
 winget install -e --id Python.Python.3.11
 ``` 
 - A GitHub account with SSH access configured
-- A Kaggle account
+- A Kaggle account (required for dataset download)
 
 Confirm Git and Python are available:
 
