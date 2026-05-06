@@ -19,8 +19,7 @@ Install these first:
 - Git: https://git-scm.com/downloads
 - Python 3.11: https://www.python.org/downloads/release/python-3110/  or by running
 ```powershell
-git --version
-py -3.11 --version
+winget install -e --id Python.Python.3.11
 ``` 
 - A GitHub account with SSH access configured
 - A Kaggle account
