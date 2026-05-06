@@ -19,7 +19,7 @@ capacities = []
 
 def coulomb_capacity(time_s, current_a):
     time_h = time_s / 3600
-    return np.trapz(np.abs(current_a), time_h)
+    return np.trapezoid(np.abs(current_a), time_h)
 
 capacity_i = coulomb_capacity(
     df['Time'].values,
@@ -59,7 +59,7 @@ def extract_voltage_features(df):
     features['V_mean'] = v.mean()
     features['V_min'] = v.min()
     features['V_std'] = v.std()
-    features['V_area'] = np.trapz(v, t)
+    features['V_area'] = np.trapezoid(v, t)
     
     return features
 
