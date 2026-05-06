@@ -76,3 +76,4 @@ urllib3==2.6.3
 xxhash==3.6.0
 yarl==1.23.0
 matplot==0.1.9
+pandas==3.0.2
